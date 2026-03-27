@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+interface IComplianceRegistry {
+    function isCompliant(address user) external view returns (bool);
+}
+
 contract SBIFCouponSettlement {
     uint256 public constant TOKEN_PRICE = 0.015 ether;
     uint256 public constant SUPPLIER_RELEASE = 0.005 ether;
@@ -12,8 +16,15 @@ contract SBIFCouponSettlement {
     address public immutable supplier;
     address public immutable courier;
     address public immutable platformTreasury;
+    address public immutable complianceRegistry;
 
     uint256 public couponCount;
+    uint256 public totalCouponsRedeemed;
+    uint256 public totalCouponsExpired;
+    uint256 public totalPlatformFeesCollected;
+    uint256 public totalMerchantReleased;
+    uint256 public totalSupplierReleased;
+    uint256 public totalCourierReleased;
 
     struct Coupon {
         uint256 id;
@@ -53,18 +64,33 @@ contract SBIFCouponSettlement {
         _;
     }
 
-    constructor(address _supplier, address _courier, address _platformTreasury) {
+    modifier onlyCompliantBuyer() {
+        require(
+            IComplianceRegistry(complianceRegistry).isCompliant(msg.sender),
+            "Buyer wallet is not AML-approved."
+        );
+        _;
+    }
+
+    constructor(
+        address _supplier,
+        address _courier,
+        address _platformTreasury,
+        address _complianceRegistry
+    ) {
         require(_supplier != address(0), "Invalid supplier.");
         require(_courier != address(0), "Invalid courier.");
         require(_platformTreasury != address(0), "Invalid platform.");
+        require(_complianceRegistry != address(0), "Invalid compliance registry.");
 
         merchant = msg.sender;
         supplier = _supplier;
         courier = _courier;
         platformTreasury = _platformTreasury;
+        complianceRegistry = _complianceRegistry;
     }
 
-    function purchaseCoupon(uint256 quantity, string calldata buyerName) external payable {
+    function purchaseCoupon(uint256 quantity, string calldata buyerName) external payable onlyCompliantBuyer {
         require(quantity > 0, "Quantity must be greater than zero.");
         require(bytes(buyerName).length > 0, "Buyer name is required.");
         require(msg.value == TOKEN_PRICE * quantity, "Incorrect payment amount.");
@@ -86,7 +112,7 @@ contract SBIFCouponSettlement {
         }
     }
 
-    function redeemCoupon(uint256 couponId) external {
+    function redeemCoupon(uint256 couponId) external onlyCompliantBuyer {
         Coupon storage coupon = coupons[couponId];
         require(coupon.owner != address(0), "Coupon does not exist.");
         require(coupon.owner == msg.sender, "Only coupon owner can redeem.");
@@ -103,6 +129,12 @@ contract SBIFCouponSettlement {
         _safeTransfer(courier, COURIER_RELEASE);
         _safeTransfer(platformTreasury, platformFee);
         _safeTransfer(merchant, merchantAmount);
+
+        totalCouponsRedeemed += 1;
+        totalPlatformFeesCollected += platformFee;
+        totalMerchantReleased += merchantAmount;
+        totalSupplierReleased += SUPPLIER_RELEASE;
+        totalCourierReleased += COURIER_RELEASE;
 
         emit CouponRedeemed(
             couponId,
@@ -129,6 +161,10 @@ contract SBIFCouponSettlement {
 
             _safeTransfer(platformTreasury, platformFee);
             _safeTransfer(merchant, merchantAmount);
+
+            totalCouponsExpired += 1;
+            totalPlatformFeesCollected += platformFee;
+            totalMerchantReleased += merchantAmount;
 
             emit CouponExpiredProcessed(coupon.id, platformFee, merchantAmount);
         }

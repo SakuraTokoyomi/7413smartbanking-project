@@ -15,32 +15,73 @@ const walletState = {
   account: null,
   chainIdHex: null,
   contractConfig: null,
-  contract: null
+  settlementContract: null,
+  complianceContract: null
 };
 
-const bankState = {
-  status: null,
-  userId: `bank-user-${Math.random().toString(36).slice(2, 10)}`,
-  accounts: [],
-  itemId: null
+const chainState = {
+  coupons: [],
+  events: [],
+  complianceRecord: null
 };
 
-async function request(url, options = {}) {
-  const response = await fetch(url, {
-    headers: { "Content-Type": "application/json" },
-    ...options
-  });
-
-  if (response.status === 204) {
-    return null;
+const stakeholders = [
+  {
+    stakeholder: "Investors / Sponsors",
+    benefit: "Observe public on-chain coupon issuance and redemption while funding the merchant ecosystem."
+  },
+  {
+    stakeholder: "Florist Merchant",
+    benefit: "Uses a permissioned public-chain workflow to raise capital and automate conditional settlement."
+  },
+  {
+    stakeholder: "Buyers / Supporters",
+    benefit: "Redeem on-chain coupon positions once their wallet receives compliance clearance."
+  },
+  {
+    stakeholder: "Suppliers",
+    benefit: "Receive deterministic settlement routed directly by the smart contract."
+  },
+  {
+    stakeholder: "Courier / Logistics",
+    benefit: "Gets programmatic payment when coupon redemption is executed."
+  },
+  {
+    stakeholder: "Compliance / RegTech Operator",
+    benefit: "Publishes AML or open-banking screening outcomes as on-chain permission records."
   }
+];
 
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.error || "Request failed");
+const bidtModel = [
+  {
+    title: "Business",
+    points: [
+      "Raise florist working capital through tokenized prepaid coupons and programmable settlement.",
+      "Use a public blockchain but restrict business access to AML-cleared wallets."
+    ]
+  },
+  {
+    title: "Information",
+    points: [
+      "Store coupon issuance, redemption, expiry, and compliance attestations on-chain.",
+      "Make the buyer wallet the primary digital identity in the system."
+    ]
+  },
+  {
+    title: "Digital",
+    points: [
+      "Represent compliance outcomes as registry records instead of hidden database checks.",
+      "Expose a dApp interface that reads live state and historical events from the chain."
+    ]
+  },
+  {
+    title: "Technology",
+    points: [
+      "Use Solidity contracts for token transaction logging and settlement.",
+      "Use a compliance registry to model permissioned access on a public chain."
+    ]
   }
-  return data;
-}
+];
 
 function shortAddress(address) {
   if (!address) {
@@ -61,260 +102,241 @@ function chainLabel(chainIdHex) {
   return labels[chainIdHex] || `Chain ${chainIdHex || "unknown"}`;
 }
 
-function formatContractRequirement() {
-  const config = walletState.contractConfig;
-  if (!config || !config.contractAddress) {
-    return "Contract not deployed. Run the local Hardhat node and deploy script first.";
+function formatTimestamp(unixSeconds) {
+  if (!unixSeconds) {
+    return "n/a";
   }
 
-  return `Contract ${shortAddress(config.contractAddress)} on ${config.networkName}.`;
+  return new Date(Number(unixSeconds) * 1000).toLocaleString();
+}
+
+function metricCard(label, value, note = "") {
+  return `
+    <article class="metric-card">
+      <h3>${label}</h3>
+      <strong>${value}</strong>
+      <p>${note}</p>
+    </article>
+  `;
+}
+
+function calculateScenarioSettlement({ scenario, dozensSold, feeRate }) {
+  const principal = scenario === "A" ? 200 : 1200;
+  const payoutPerDozen = scenario === "A" ? 2.1 : 12.6;
+  const merchantCogs = scenario === "A" ? dozensSold * 10 : 0;
+  const grossRevenue = dozensSold * 20;
+  const investorGrossEntitlement = dozensSold * payoutPerDozen;
+  const investorProfit = investorGrossEntitlement - principal;
+  const investorReturnRate = investorProfit / principal;
+  const annualizedInvestorRoi = investorReturnRate * 52;
+  const platformFee = investorGrossEntitlement * feeRate;
+  const merchantNetProfit = grossRevenue - merchantCogs - investorGrossEntitlement - 700;
+  const merchantRoi = scenario === "A" ? merchantNetProfit / principal : null;
+
+  return {
+    scenario,
+    dozensSold,
+    grossRevenue,
+    investorGrossEntitlement,
+    investorProfit,
+    investorReturnRate,
+    annualizedInvestorRoi,
+    platformFee,
+    feeRate,
+    merchantNetProfit,
+    merchantRoi
+  };
+}
+
+function renderScenario(result) {
+  document.getElementById("scenario-result").innerHTML = [
+    metricCard("Gross Revenue", currency.format(result.grossRevenue), `Sales of ${result.dozensSold} dozen.`),
+    metricCard("Investor Gross", currency.format(result.investorGrossEntitlement), `Scenario ${result.scenario} entitlement.`),
+    metricCard("Investor Profit", currency.format(result.investorProfit), `${percent.format(result.investorReturnRate)} weekly return.`),
+    metricCard("Annualized ROI", percent.format(result.annualizedInvestorRoi), "Simple annualized return."),
+    metricCard("Platform Fee", currency.format(result.platformFee), `${percent.format(result.feeRate)} fee rate.`),
+    metricCard(
+      "Merchant Net Profit",
+      currency.format(result.merchantNetProfit),
+      result.merchantRoi === null ? "ROI undefined when merchant invests $0." : `${percent.format(result.merchantRoi)} ROI.`
+    )
+  ].join("");
+}
+
+function renderStakeholders() {
+  document.getElementById("stakeholders").innerHTML = stakeholders
+    .map((item) => `
+      <article class="stack-item">
+        <h3>${item.stakeholder}</h3>
+        <p>${item.benefit}</p>
+      </article>
+    `)
+    .join("");
+}
+
+function renderBidt() {
+  document.getElementById("bidt").innerHTML = bidtModel
+    .map((section) => `
+      <article class="bidt-item">
+        <h3>${section.title}</h3>
+        <ul class="compact-list">${section.points.map((point) => `<li>${point}</li>`).join("")}</ul>
+      </article>
+    `)
+    .join("");
 }
 
 function renderWalletStatus() {
   const container = document.getElementById("wallet-status");
-  const addressField = document.getElementById("wallet-address-field");
   const feedback = document.getElementById("wallet-feedback");
+  const targetField = document.getElementById("target-address-field");
 
   if (!walletState.provider) {
     container.innerHTML = `
       <h3>Wallet status</h3>
-      <p>No injected wallet detected. Install MetaMask to use on-chain purchase and redemption.</p>
+      <p>No injected wallet detected. Install MetaMask to use the dApp.</p>
     `;
-    addressField.value = "";
-    feedback.textContent = formatContractRequirement();
+    feedback.textContent = "This frontend reads contracts directly from the blockchain.";
     return;
   }
 
   if (!walletState.account) {
     container.innerHTML = `
       <h3>Wallet status</h3>
-      <p>Wallet detected. Connect it to sign real contract transactions.</p>
+      <p>Wallet detected. Connect it to read compliance status and send transactions.</p>
     `;
-    addressField.value = "";
-    feedback.textContent = formatContractRequirement();
     return;
   }
 
-  addressField.value = walletState.account;
+  targetField.value = walletState.account;
   container.innerHTML = `
     <h3>Wallet connected</h3>
     <p>Address: <strong>${shortAddress(walletState.account)}</strong></p>
     <p>Network: <strong>${chainLabel(walletState.chainIdHex)}</strong></p>
   `;
-  feedback.textContent = "Wallet is ready. New coupon purchase and redemption will call the Solidity contract first, then sync the app ledger.";
+  feedback.textContent = "Wallet connected. Purchase and redeem will only work after the wallet has an on-chain compliance record.";
 }
 
 function renderContractStatus() {
   const container = document.getElementById("contract-status");
   const config = walletState.contractConfig;
 
-  if (!config || !config.contractAddress) {
+  if (!config || !config.settlementContractAddress || !config.complianceRegistryAddress) {
     container.innerHTML = `
       <h3>Contract status</h3>
-      <p>No deployed contract configured yet. After deployment, this panel will show the live address.</p>
+      <p>Contracts not deployed yet. Compile and deploy both contracts first.</p>
     `;
     return;
   }
 
   container.innerHTML = `
-    <h3>Contract ready</h3>
-    <p>Address: <strong>${shortAddress(config.contractAddress)}</strong></p>
+    <h3>Contracts ready</h3>
+    <p>Settlement: <strong>${shortAddress(config.settlementContractAddress)}</strong></p>
+    <p>Compliance: <strong>${shortAddress(config.complianceRegistryAddress)}</strong></p>
     <p>Network: <strong>${config.networkName}</strong></p>
   `;
 }
 
-function renderBankStatus() {
-  const container = document.getElementById("bank-status");
-  const feedback = document.getElementById("bank-feedback");
+function renderComplianceStatus() {
+  const container = document.getElementById("compliance-status");
+  const feedback = document.getElementById("compliance-feedback");
+  const record = chainState.complianceRecord;
 
-  if (!bankState.status?.enabled) {
+  if (!walletState.account) {
     container.innerHTML = `
-      <h3>Bank connection</h3>
-      <p>Plaid is not configured yet. Add server env vars to enable official open banking connectivity.</p>
+      <h3>Compliance status</h3>
+      <p>Connect a wallet to query or manage compliance permissions.</p>
     `;
-    feedback.textContent = "Set PLAID_CLIENT_ID and PLAID_SECRET to enable the bank flow.";
     return;
   }
 
-  if (!bankState.itemId) {
+  if (!record || !record.approved || record.expiry <= Math.floor(Date.now() / 1000)) {
     container.innerHTML = `
-      <h3>Bank connection</h3>
-      <p>Plaid ${bankState.status.environment} is ready. Connect a bank account to pull account balances through the official API.</p>
+      <h3>Compliance status</h3>
+      <p>Wallet <strong>${shortAddress(walletState.account)}</strong> is not currently approved.</p>
     `;
+    feedback.textContent = "A compliance admin must grant a screening result before this wallet can purchase or redeem.";
     return;
   }
 
   container.innerHTML = `
-    <h3>Bank connected</h3>
-    <p>Provider: <strong>Plaid ${bankState.status.environment}</strong></p>
-    <p>Item: <strong>${shortAddress(bankState.itemId)}</strong></p>
+    <h3>Compliance active</h3>
+    <p>Wallet: <strong>${shortAddress(walletState.account)}</strong></p>
+    <p>Method: <strong>${record.methodText}</strong></p>
+    <p>Expires: <strong>${formatTimestamp(record.expiry)}</strong></p>
   `;
-  feedback.textContent = "Bank account connection established through Plaid. Account data below is fetched from the API.";
+  feedback.textContent = "This wallet is permissioned to transact on the public chain.";
 }
 
-function renderBankAccounts(accounts) {
-  const container = document.getElementById("bank-accounts");
-  if (!accounts.length) {
-    container.innerHTML = "";
-    return;
-  }
-
-  container.innerHTML = accounts
-    .map(
-      (account) => `
-        <article class="bank-account">
-          <h3>${account.name}</h3>
-          <p>${account.type} / ${account.subtype || "n/a"} / ****${account.mask || "0000"}</p>
-          <p>Available: ${account.balances.available ?? "n/a"} ${account.balances.iso_currency_code || "USD"}</p>
-          <p>Current: ${account.balances.current ?? "n/a"} ${account.balances.iso_currency_code || "USD"}</p>
-        </article>
-      `
-    )
-    .join("");
-}
-
-function renderMetricGrid(container, items) {
-  container.innerHTML = items
-    .map(
-      ({ label, value, note = "" }) => `
-        <article class="metric-card">
-          <h3>${label}</h3>
-          <strong>${value}</strong>
-          <p>${note}</p>
-        </article>
-      `
-    )
-    .join("");
-}
-
-function renderStakeholders(stakeholders) {
-  const container = document.getElementById("stakeholders");
-  container.innerHTML = stakeholders
-    .map(
-      (item) => `
-        <article class="stack-item">
-          <h3>${item.stakeholder}</h3>
-          <p>${item.benefit}</p>
-        </article>
-      `
-    )
-    .join("");
-}
-
-function renderBidt(model) {
-  const container = document.getElementById("bidt");
-  container.innerHTML = Object.values(model)
-    .map(
-      (section) => `
-        <article class="bidt-item">
-          <h3>${section.title}</h3>
-          <ul class="compact-list">${section.points.map((point) => `<li>${point}</li>`).join("")}</ul>
-        </article>
-      `
-    )
-    .join("");
+function renderMetrics(metrics) {
+  document.getElementById("metrics").innerHTML = [
+    metricCard("Coupons Issued", metrics.couponCount, "Total coupons minted on-chain."),
+    metricCard("Coupons Redeemed", metrics.totalCouponsRedeemed, "Redemptions finalized by the contract."),
+    metricCard("Coupons Expired", metrics.totalCouponsExpired, "Expiry settlements released by merchant action."),
+    metricCard("Platform Fees", currency.format(metrics.totalPlatformFeesCollected), "On-chain fee accumulation."),
+    metricCard("Merchant Release", currency.format(metrics.totalMerchantReleased), "Value released to florist."),
+    metricCard("Supplier Release", currency.format(metrics.totalSupplierReleased), "Supplier distribution."),
+    metricCard("Courier Release", currency.format(metrics.totalCourierReleased), "Courier distribution.")
+  ].join("");
 }
 
 function renderCoupons(coupons) {
   const container = document.getElementById("coupon-list");
-  if (coupons.length === 0) {
-    container.innerHTML = `<div class="stack-item"><p>No coupons issued yet.</p></div>`;
+  if (!coupons.length) {
+    container.innerHTML = `<div class="stack-item"><p>No coupons issued on-chain yet.</p></div>`;
     return;
   }
 
   container.innerHTML = coupons
     .slice()
     .reverse()
-    .map(
-      (coupon) => `
-        <div class="coupon-row">
-          <div>
-            <strong>${coupon.buyerName}</strong>
-            <p>Local ${coupon.id}</p>
-          </div>
-          <div>
-            <strong>${coupon.contractCouponId ? `Chain #${coupon.contractCouponId}` : coupon.paymentMethod}</strong>
-            <p>${coupon.walletAddress ? shortAddress(coupon.walletAddress) : coupon.status}</p>
-          </div>
-          <div>
-            <strong>${currency.format(coupon.tokenPrice)}</strong>
-            <p>Expires ${new Date(coupon.expiresAt).toLocaleDateString()}</p>
-          </div>
-          <div>
-            <strong>${coupon.status}</strong>
-            <p>${coupon.purchaseTxHash ? shortAddress(coupon.purchaseTxHash) : "No chain tx"}</p>
-          </div>
-          <button ${coupon.status !== "issued" ? "disabled" : ""} data-redeem="${coupon.id}">
-            Redeem
-          </button>
+    .map((coupon) => `
+      <div class="coupon-row">
+        <div>
+          <strong>${coupon.buyerName}</strong>
+          <p>Coupon #${coupon.id}</p>
         </div>
-      `
-    )
+        <div>
+          <strong>${shortAddress(coupon.owner)}</strong>
+          <p>${coupon.redeemed ? "redeemed" : coupon.expiredProcessed ? "expired" : "issued"}</p>
+        </div>
+        <div>
+          <strong>${currency.format(15)}</strong>
+          <p>Issued ${formatTimestamp(coupon.issuedAt)}</p>
+        </div>
+        <div>
+          <strong>${formatTimestamp(coupon.expiresAt)}</strong>
+          <p>${coupon.redeemed ? "Redeemed" : coupon.expiredProcessed ? "Expired settled" : "Active"}</p>
+        </div>
+        <button ${coupon.redeemed || coupon.expiredProcessed ? "disabled" : ""} data-redeem="${coupon.id}">
+          Redeem
+        </button>
+      </div>
+    `)
     .join("");
 }
 
-function renderTransactions(transactions) {
+function renderTransactions(events) {
   const container = document.getElementById("transactions");
-  if (transactions.length === 0) {
-    container.innerHTML = `<div class="stack-item"><p>No transactions yet.</p></div>`;
+  if (!events.length) {
+    container.innerHTML = `<div class="stack-item"><p>No blockchain events yet.</p></div>`;
     return;
   }
 
-  container.innerHTML = transactions
-    .map(
-      (entry) => `
-        <article class="stack-item">
-          <h3>${entry.type}</h3>
-          <p>${new Date(entry.timestamp).toLocaleString()} | ${entry.buyerName || "system"} | ${currency.format(entry.value || 0)}</p>
-          <p>${entry.walletAddress ? `Wallet ${shortAddress(entry.walletAddress)}` : "No wallet attached"}</p>
-          <p>${entry.txHash ? `Tx ${shortAddress(entry.txHash)}` : "No chain transaction recorded"}</p>
-        </article>
-      `
-    )
+  container.innerHTML = events
+    .slice()
+    .reverse()
+    .map((event) => `
+      <article class="stack-item">
+        <h3>${event.type}</h3>
+        <p>${event.details}</p>
+        <p>Block ${event.blockNumber} | Tx ${shortAddress(event.transactionHash)}</p>
+      </article>
+    `)
     .join("");
 }
 
-function renderLedgerMetrics(metrics) {
-  renderMetricGrid(document.getElementById("metrics"), [
-    { label: "Coupons Issued", value: metrics.totalCouponsIssued, note: "Total prepaid tokens minted." },
-    { label: "Coupons Redeemed", value: metrics.totalCouponsRedeemed, note: "On-chain redemption synced back to app ledger." },
-    { label: "Coupons Expired", value: metrics.totalCouponsExpired, note: "Expired and settled to merchant." },
-    { label: "Platform Fees", value: currency.format(metrics.platformFeesCollected), note: "BaaS/BaaP revenue." },
-    { label: "Merchant Release", value: currency.format(metrics.merchantReleases), note: "Net value to florist." },
-    { label: "Supplier Release", value: currency.format(metrics.supplierReleases), note: "Conditional supplier payout." },
-    { label: "Courier Release", value: currency.format(metrics.courierReleases), note: "Delivery-triggered payout." }
-  ]);
-}
-
-function renderScenario(result) {
-  renderMetricGrid(document.getElementById("scenario-result"), [
-    { label: "Gross Revenue", value: currency.format(result.grossRevenue), note: `Sales of ${result.dozensSold} dozen.` },
-    { label: "Investor Gross", value: currency.format(result.investorGrossEntitlement), note: `Scenario ${result.scenario} entitlement.` },
-    { label: "Investor Profit", value: currency.format(result.investorProfit), note: `${percent.format(result.investorReturnRate)} weekly return on principal.` },
-    { label: "Annualized ROI", value: percent.format(result.annualizedInvestorRoi), note: "Simple annualized return." },
-    { label: "Platform Fee", value: currency.format(result.platformFee), note: `${percent.format(result.platformFeeRate)} fee rate.` },
-    { label: "Merchant Net Profit", value: currency.format(result.merchantNetProfit), note: result.merchantRoi === null ? "ROI undefined when merchant invests $0." : `${percent.format(result.merchantRoi)} ROI.` }
-  ]);
-}
-
-async function refreshDashboard() {
-  const data = await request("/api/overview");
-  renderScenario(data.scenarios.scenarioA);
-  renderLedgerMetrics(data.ledger.metrics);
-  renderCoupons(data.ledger.coupons);
-  renderTransactions(data.ledger.transactions);
-  renderStakeholders(data.ecosystem.stakeholders);
-  renderBidt(data.bidtModel);
-  window.__couponCache = data.ledger.coupons;
-}
-
-async function loadOpenBankingStatus() {
-  bankState.status = await request("/api/open-banking/status");
-  renderBankStatus();
-}
-
 async function loadContractConfig() {
-  const response = await fetch("/contract-config.json");
+  const response = await fetch("./contract-config.json");
   walletState.contractConfig = await response.json();
   renderContractStatus();
 }
@@ -333,22 +355,35 @@ async function syncWalletState() {
   if (walletState.account) {
     walletState.browserProvider = new window.ethers.BrowserProvider(walletState.provider);
     walletState.signer = await walletState.browserProvider.getSigner();
-    await instantiateContract();
+    await instantiateContracts();
   }
 
   renderWalletStatus();
 }
 
-async function instantiateContract() {
+async function instantiateContracts() {
   const config = walletState.contractConfig;
-  if (!walletState.browserProvider || !walletState.signer || !config?.contractAddress || !config.abi?.length) {
-    walletState.contract = null;
+  if (
+    !walletState.browserProvider ||
+    !walletState.signer ||
+    !config?.settlementContractAddress ||
+    !config?.complianceRegistryAddress ||
+    !config?.settlementAbi?.length ||
+    !config?.complianceRegistryAbi?.length
+  ) {
+    walletState.settlementContract = null;
+    walletState.complianceContract = null;
     return;
   }
 
-  walletState.contract = new window.ethers.Contract(
-    config.contractAddress,
-    config.abi,
+  walletState.settlementContract = new window.ethers.Contract(
+    config.settlementContractAddress,
+    config.settlementAbi,
+    walletState.signer
+  );
+  walletState.complianceContract = new window.ethers.Contract(
+    config.complianceRegistryAddress,
+    config.complianceRegistryAbi,
     walletState.signer
   );
 }
@@ -357,13 +392,13 @@ async function connectWallet() {
   const feedback = document.getElementById("wallet-feedback");
   if (!window.ethereum) {
     feedback.textContent = "No EVM wallet detected. Install MetaMask first.";
-    renderWalletStatus();
     return;
   }
 
   try {
     await window.ethereum.request({ method: "eth_requestAccounts" });
     await syncWalletState();
+    await refreshOnChainData();
   } catch (error) {
     feedback.textContent = error.message || "Wallet connection was rejected.";
   }
@@ -373,11 +408,13 @@ function disconnectWallet() {
   walletState.browserProvider = null;
   walletState.signer = null;
   walletState.account = null;
-  walletState.contract = null;
+  walletState.settlementContract = null;
+  walletState.complianceContract = null;
   walletState.chainIdHex = null;
-  document.getElementById("wallet-address-field").value = "";
+  chainState.complianceRecord = null;
   renderWalletStatus();
-  document.getElementById("wallet-feedback").textContent = "Local wallet session cleared. Browser wallet remains installed.";
+  renderComplianceStatus();
+  document.getElementById("wallet-feedback").textContent = "Local wallet session cleared.";
 }
 
 async function switchToLocalChain() {
@@ -388,7 +425,6 @@ async function switchToLocalChain() {
   }
 
   const hexChainId = `0x${Number(walletState.contractConfig.chainId).toString(16)}`;
-
   try {
     await window.ethereum.request({
       method: "wallet_switchEthereumChain",
@@ -400,7 +436,7 @@ async function switchToLocalChain() {
         method: "wallet_addEthereumChain",
         params: [{
           chainId: hexChainId,
-          chainName: "Hardhat Localhost",
+          chainName: walletState.contractConfig.networkName,
           nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
           rpcUrls: ["http://127.0.0.1:8545"]
         }]
@@ -412,15 +448,16 @@ async function switchToLocalChain() {
   }
 
   await syncWalletState();
+  await refreshOnChainData();
 }
 
 async function ensureReadyForContractAction() {
   if (!walletState.account) {
-    throw new Error("Connect your wallet before using on-chain purchase or redemption.");
+    throw new Error("Connect your wallet before using on-chain actions.");
   }
 
-  if (!walletState.contractConfig?.contractAddress || !walletState.contract) {
-    throw new Error("Contract not deployed yet. Run the local chain and deployment script first.");
+  if (!walletState.settlementContract || !walletState.complianceContract) {
+    throw new Error("Contracts not deployed or not loaded yet.");
   }
 
   const expectedHex = `0x${Number(walletState.contractConfig.chainId).toString(16)}`;
@@ -429,90 +466,197 @@ async function ensureReadyForContractAction() {
   }
 }
 
-function extractEventArgs(receipt, eventName) {
-  return receipt.logs
-    .map((log) => {
-      try {
-        return walletState.contract.interface.parseLog(log);
-      } catch {
-        return null;
-      }
-    })
-    .filter(Boolean)
-    .filter((entry) => entry.name === eventName)
-    .map((entry) => entry.args);
+async function loadComplianceRecord() {
+  if (!walletState.account || !walletState.complianceContract) {
+    chainState.complianceRecord = null;
+    renderComplianceStatus();
+    return;
+  }
+
+  const record = await walletState.complianceContract.getRecord(walletState.account);
+  chainState.complianceRecord = {
+    approved: record.approved,
+    expiry: Number(record.expiry),
+    method: record.method,
+    methodText: record.method === "0x0000000000000000000000000000000000000000000000000000000000000000"
+      ? "NONE"
+      : window.ethers.decodeBytes32String(record.method),
+    updatedAt: Number(record.updatedAt)
+  };
+  renderComplianceStatus();
+}
+
+async function loadChainMetrics() {
+  if (!walletState.settlementContract) {
+    renderMetrics({
+      couponCount: 0,
+      totalCouponsRedeemed: 0,
+      totalCouponsExpired: 0,
+      totalPlatformFeesCollected: 0,
+      totalMerchantReleased: 0,
+      totalSupplierReleased: 0,
+      totalCourierReleased: 0
+    });
+    return;
+  }
+
+  const [
+    couponCount,
+    totalCouponsRedeemed,
+    totalCouponsExpired,
+    totalPlatformFeesCollected,
+    totalMerchantReleased,
+    totalSupplierReleased,
+    totalCourierReleased
+  ] = await Promise.all([
+    walletState.settlementContract.couponCount(),
+    walletState.settlementContract.totalCouponsRedeemed(),
+    walletState.settlementContract.totalCouponsExpired(),
+    walletState.settlementContract.totalPlatformFeesCollected(),
+    walletState.settlementContract.totalMerchantReleased(),
+    walletState.settlementContract.totalSupplierReleased(),
+    walletState.settlementContract.totalCourierReleased()
+  ]);
+
+  renderMetrics({
+    couponCount: Number(couponCount),
+    totalCouponsRedeemed: Number(totalCouponsRedeemed),
+    totalCouponsExpired: Number(totalCouponsExpired),
+    totalPlatformFeesCollected: Number(window.ethers.formatEther(totalPlatformFeesCollected)) * 1000,
+    totalMerchantReleased: Number(window.ethers.formatEther(totalMerchantReleased)) * 1000,
+    totalSupplierReleased: Number(window.ethers.formatEther(totalSupplierReleased)) * 1000,
+    totalCourierReleased: Number(window.ethers.formatEther(totalCourierReleased)) * 1000
+  });
+}
+
+async function loadCoupons() {
+  if (!walletState.settlementContract) {
+    chainState.coupons = [];
+    renderCoupons(chainState.coupons);
+    return;
+  }
+
+  const count = Number(await walletState.settlementContract.couponCount());
+  const coupons = [];
+  for (let index = 1; index <= count; index += 1) {
+    const coupon = await walletState.settlementContract.getCoupon(index);
+    coupons.push({
+      id: Number(coupon.id),
+      owner: coupon.owner,
+      buyerName: coupon.buyerName,
+      redeemed: coupon.redeemed,
+      expiredProcessed: coupon.expiredProcessed,
+      issuedAt: Number(coupon.issuedAt),
+      expiresAt: Number(coupon.expiresAt)
+    });
+  }
+
+  chainState.coupons = coupons;
+  renderCoupons(coupons);
+}
+
+async function loadEvents() {
+  if (!walletState.settlementContract || !walletState.complianceContract) {
+    chainState.events = [];
+    renderTransactions([]);
+    return;
+  }
+
+  const [purchaseEvents, redeemEvents, expiryEvents, grantEvents, revokeEvents] = await Promise.all([
+    walletState.settlementContract.queryFilter(walletState.settlementContract.filters.CouponPurchased()),
+    walletState.settlementContract.queryFilter(walletState.settlementContract.filters.CouponRedeemed()),
+    walletState.settlementContract.queryFilter(walletState.settlementContract.filters.CouponExpiredProcessed()),
+    walletState.complianceContract.queryFilter(walletState.complianceContract.filters.ComplianceGranted()),
+    walletState.complianceContract.queryFilter(walletState.complianceContract.filters.ComplianceRevoked())
+  ]);
+
+  const eventRows = [
+    ...purchaseEvents.map((event) => ({
+      type: "coupon_purchase",
+      blockNumber: event.blockNumber,
+      transactionHash: event.transactionHash,
+      details: `${event.args.buyerName} purchased coupon #${Number(event.args.couponId)} from ${shortAddress(event.args.buyer)}`
+    })),
+    ...redeemEvents.map((event) => ({
+      type: "coupon_redeemed",
+      blockNumber: event.blockNumber,
+      transactionHash: event.transactionHash,
+      details: `Wallet ${shortAddress(event.args.buyer)} redeemed coupon #${Number(event.args.couponId)}`
+    })),
+    ...expiryEvents.map((event) => ({
+      type: "coupon_expiry_processed",
+      blockNumber: event.blockNumber,
+      transactionHash: event.transactionHash,
+      details: `Merchant processed expiry for coupon #${Number(event.args.couponId)}`
+    })),
+    ...grantEvents.map((event) => ({
+      type: "compliance_granted",
+      blockNumber: event.blockNumber,
+      transactionHash: event.transactionHash,
+      details: `${shortAddress(event.args.user)} approved via ${window.ethers.decodeBytes32String(event.args.method)}`
+    })),
+    ...revokeEvents.map((event) => ({
+      type: "compliance_revoked",
+      blockNumber: event.blockNumber,
+      transactionHash: event.transactionHash,
+      details: `${shortAddress(event.args.user)} compliance revoked`
+    }))
+  ].sort((a, b) => a.blockNumber - b.blockNumber);
+
+  chainState.events = eventRows;
+  renderTransactions(eventRows);
+}
+
+async function refreshOnChainData() {
+  await Promise.all([
+    loadComplianceRecord(),
+    loadChainMetrics(),
+    loadCoupons(),
+    loadEvents()
+  ]);
 }
 
 async function handleScenarioSubmit(event) {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
-  const result = await request("/api/scenarios/settle", {
-    method: "POST",
-    body: JSON.stringify({
+  renderScenario(
+    calculateScenarioSettlement({
       scenario: form.get("scenario"),
       dozensSold: Number(form.get("dozensSold")),
       feeRate: Number(form.get("feeRate"))
     })
-  });
-  renderScenario(result);
+  );
 }
 
-async function connectBank() {
-  const feedback = document.getElementById("bank-feedback");
+async function handleGrantCompliance(event) {
+  event.preventDefault();
+  const feedback = document.getElementById("compliance-feedback");
+  const form = new FormData(event.currentTarget);
 
   try {
-    if (!bankState.status?.enabled) {
-      throw new Error("Open banking is not configured on the server yet.");
-    }
-
-    const tokenResponse = await request("/api/open-banking/create-link-token", {
-      method: "POST",
-      body: JSON.stringify({ userId: bankState.userId })
-    });
-
-    if (!window.Plaid) {
-      throw new Error("Plaid Link script did not load.");
-    }
-
-    const handler = window.Plaid.create({
-      token: tokenResponse.linkToken,
-      onSuccess: async (publicToken, metadata) => {
-        const exchange = await request("/api/open-banking/exchange-public-token", {
-          method: "POST",
-          body: JSON.stringify({
-            publicToken,
-            userId: bankState.userId,
-            institutionId: metadata?.institution?.institution_id || null
-          })
-        });
-
-        bankState.itemId = exchange.itemId;
-        bankState.accounts = exchange.accounts;
-        renderBankStatus();
-        renderBankAccounts(bankState.accounts);
-      },
-      onExit: (error) => {
-        if (error) {
-          feedback.textContent = error.display_message || error.error_message || "Plaid Link exited with an error.";
-        }
-      }
-    });
-
-    handler.open();
+    await ensureReadyForContractAction();
+    const targetAddress = String(form.get("targetAddress")).trim();
+    const validDays = Number(form.get("validDays"));
+    const expiry = Math.floor(Date.now() / 1000) + validDays * 24 * 60 * 60;
+    const method = window.ethers.encodeBytes32String(String(form.get("method")));
+    const tx = await walletState.complianceContract.grantCompliance(targetAddress, expiry, method);
+    await tx.wait();
+    feedback.textContent = `Compliance granted to ${shortAddress(targetAddress)}.`;
+    await refreshOnChainData();
   } catch (error) {
     feedback.textContent = error.message;
   }
 }
 
-async function refreshBankAccounts() {
-  const feedback = document.getElementById("bank-feedback");
-
+async function handleRevokeCompliance() {
+  const feedback = document.getElementById("compliance-feedback");
   try {
-    const response = await request(`/api/open-banking/accounts?userId=${encodeURIComponent(bankState.userId)}`);
-    bankState.itemId = response.itemId;
-    bankState.accounts = response.accounts;
-    renderBankStatus();
-    renderBankAccounts(bankState.accounts);
+    await ensureReadyForContractAction();
+    const targetAddress = document.getElementById("target-address-field").value.trim();
+    const tx = await walletState.complianceContract.revokeCompliance(targetAddress);
+    await tx.wait();
+    feedback.textContent = `Compliance revoked for ${shortAddress(targetAddress)}.`;
+    await refreshOnChainData();
   } catch (error) {
     feedback.textContent = error.message;
   }
@@ -525,32 +669,14 @@ async function handlePurchase(event) {
 
   try {
     await ensureReadyForContractAction();
-
     const quantity = Number(form.get("quantity"));
     const buyerName = String(form.get("buyerName"));
-    const tx = await walletState.contract.purchaseCoupon(quantity, buyerName, {
+    const tx = await walletState.settlementContract.purchaseCoupon(quantity, buyerName, {
       value: BigInt(walletState.contractConfig.tokenPriceWei) * BigInt(quantity)
     });
-    const receipt = await tx.wait();
-    const purchaseEvents = extractEventArgs(receipt, "CouponPurchased");
-    const contractCouponIds = purchaseEvents.map((args) => Number(args.couponId));
-
-    const result = await request("/api/coupons/purchase", {
-      method: "POST",
-      body: JSON.stringify({
-        buyerName,
-        walletAddress: walletState.account,
-        quantity,
-        paymentMethod: form.get("paymentMethod"),
-        txHash: receipt.hash,
-        chainId: Number(walletState.contractConfig.chainId),
-        contractAddress: walletState.contractConfig.contractAddress,
-        contractCouponIds
-      })
-    });
-
-    feedback.textContent = `On-chain purchase confirmed. Issued ${result.settlement.quantity} coupon(s) in tx ${shortAddress(receipt.hash)}.`;
-    await refreshDashboard();
+    await tx.wait();
+    feedback.textContent = `On-chain purchase confirmed in ${shortAddress(tx.hash)}.`;
+    await refreshOnChainData();
   } catch (error) {
     feedback.textContent = error.message;
   }
@@ -563,47 +689,42 @@ async function handleCouponActions(event) {
   }
 
   const feedback = document.getElementById("coupon-feedback");
-  const coupon = (window.__couponCache || []).find((entry) => entry.id === button.dataset.redeem);
-
   try {
     await ensureReadyForContractAction();
-
-    if (!coupon?.contractCouponId) {
-      throw new Error("This coupon is missing an on-chain coupon id.");
-    }
-
-    const tx = await walletState.contract.redeemCoupon(coupon.contractCouponId);
-    const receipt = await tx.wait();
-    const result = await request(`/api/coupons/${coupon.id}/redeem`, {
-      method: "POST",
-      body: JSON.stringify({ txHash: receipt.hash })
-    });
-
-    feedback.textContent = `On-chain redemption confirmed for coupon #${coupon.contractCouponId}. Merchant received ${currency.format(result.settlement.merchantRelease)} after settlement.`;
-    await refreshDashboard();
+    const tx = await walletState.settlementContract.redeemCoupon(Number(button.dataset.redeem));
+    await tx.wait();
+    feedback.textContent = `On-chain redemption confirmed for coupon #${button.dataset.redeem}.`;
+    await refreshOnChainData();
   } catch (error) {
     feedback.textContent = error.message;
   }
 }
 
 async function handleProcessExpiry() {
-  const result = await request("/api/coupons/process-expiry", {
-    method: "POST",
-    body: JSON.stringify({})
-  });
-  document.getElementById("coupon-feedback").textContent = `Processed ${result.expiredCount} expired coupon(s). Merchant release ${currency.format(result.merchantReleaseTotal)}.`;
-  await refreshDashboard();
-}
+  const feedback = document.getElementById("coupon-feedback");
+  try {
+    await ensureReadyForContractAction();
+    const now = Math.floor(Date.now() / 1000);
+    const expiredIds = chainState.coupons
+      .filter((coupon) => !coupon.redeemed && !coupon.expiredProcessed && coupon.expiresAt < now)
+      .map((coupon) => coupon.id);
 
-async function handleReset() {
-  await request("/api/coupons", { method: "DELETE" });
-  document.getElementById("coupon-feedback").textContent = "Demo ledger reset.";
-  await refreshDashboard();
+    if (!expiredIds.length) {
+      feedback.textContent = "No expired coupons need processing right now.";
+      return;
+    }
+
+    const tx = await walletState.settlementContract.processExpiredCoupons(expiredIds);
+    await tx.wait();
+    feedback.textContent = `Processed ${expiredIds.length} expired coupon(s) on-chain.`;
+    await refreshOnChainData();
+  } catch (error) {
+    feedback.textContent = error.message;
+  }
 }
 
 function bindWalletEvents() {
   if (!window.ethereum) {
-    renderWalletStatus();
     return;
   }
 
@@ -611,8 +732,9 @@ function bindWalletEvents() {
     walletState.account = accounts[0] || null;
     walletState.browserProvider = walletState.account ? new window.ethers.BrowserProvider(window.ethereum) : null;
     walletState.signer = walletState.account ? await walletState.browserProvider.getSigner() : null;
-    await instantiateContract();
+    await instantiateContracts();
     renderWalletStatus();
+    await refreshOnChainData();
   });
 
   window.ethereum.on("chainChanged", async (chainId) => {
@@ -620,30 +742,35 @@ function bindWalletEvents() {
     if (walletState.account) {
       walletState.browserProvider = new window.ethers.BrowserProvider(window.ethereum);
       walletState.signer = await walletState.browserProvider.getSigner();
-      await instantiateContract();
+      await instantiateContracts();
     }
     renderWalletStatus();
+    await refreshOnChainData();
   });
 }
 
 document.getElementById("scenario-form").addEventListener("submit", handleScenarioSubmit);
+document.getElementById("compliance-form").addEventListener("submit", handleGrantCompliance);
 document.getElementById("purchase-form").addEventListener("submit", handlePurchase);
 document.getElementById("coupon-list").addEventListener("click", handleCouponActions);
 document.getElementById("process-expiry").addEventListener("click", handleProcessExpiry);
-document.getElementById("reset-ledger").addEventListener("click", handleReset);
+document.getElementById("refresh-chain").addEventListener("click", refreshOnChainData);
+document.getElementById("refresh-compliance").addEventListener("click", loadComplianceRecord);
+document.getElementById("revoke-compliance").addEventListener("click", handleRevokeCompliance);
 document.getElementById("connect-wallet").addEventListener("click", connectWallet);
 document.getElementById("disconnect-wallet").addEventListener("click", disconnectWallet);
 document.getElementById("switch-network").addEventListener("click", switchToLocalChain);
-document.getElementById("connect-bank").addEventListener("click", connectBank);
-document.getElementById("refresh-bank").addEventListener("click", refreshBankAccounts);
 
-Promise.all([loadContractConfig(), syncWalletState(), refreshDashboard(), loadOpenBankingStatus()])
-  .then(() => {
+Promise.all([loadContractConfig(), syncWalletState()])
+  .then(async () => {
+    renderStakeholders();
+    renderBidt();
+    renderScenario(calculateScenarioSettlement({ scenario: "A", dozensSold: 100, feeRate: 0.015 }));
     bindWalletEvents();
     renderWalletStatus();
     renderContractStatus();
-    renderBankStatus();
-    renderBankAccounts(bankState.accounts);
+    renderComplianceStatus();
+    await refreshOnChainData();
   })
   .catch((error) => {
     document.getElementById("coupon-feedback").textContent = error.message;

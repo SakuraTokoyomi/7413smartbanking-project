@@ -2,16 +2,21 @@ const fs = require("fs");
 const path = require("path");
 const solc = require("solc");
 
-const contractPath = path.resolve(__dirname, "..", "contracts", "SBIFCouponSettlement.sol");
-const source = fs.readFileSync(contractPath, "utf8");
+const contractsDir = path.resolve(__dirname, "..", "contracts");
+const sources = Object.fromEntries(
+  fs.readdirSync(contractsDir)
+    .filter((file) => file.endsWith(".sol"))
+    .map((file) => [
+      file,
+      {
+        content: fs.readFileSync(path.join(contractsDir, file), "utf8")
+      }
+    ])
+);
 
 const input = {
   language: "Solidity",
-  sources: {
-    "SBIFCouponSettlement.sol": {
-      content: source
-    }
-  },
+  sources,
   settings: {
     optimizer: {
       enabled: true,
@@ -34,22 +39,24 @@ if (output.errors) {
   }
 }
 
-const artifact = output.contracts["SBIFCouponSettlement.sol"].SBIFCouponSettlement;
 const artifactDir = path.resolve(__dirname, "..", "artifacts");
 fs.mkdirSync(artifactDir, { recursive: true });
-const artifactPath = path.join(artifactDir, "SBIFCouponSettlement.json");
-
-fs.writeFileSync(
-  artifactPath,
-  JSON.stringify(
-    {
-      contractName: "SBIFCouponSettlement",
-      abi: artifact.abi,
-      bytecode: `0x${artifact.evm.bytecode.object}`
-    },
-    null,
-    2
-  )
-);
-
-console.log(`Compiled contract artifact written to ${artifactPath}`);
+for (const [sourceName, contracts] of Object.entries(output.contracts)) {
+  for (const [contractName, artifact] of Object.entries(contracts)) {
+    const artifactPath = path.join(artifactDir, `${contractName}.json`);
+    fs.writeFileSync(
+      artifactPath,
+      JSON.stringify(
+        {
+          contractName,
+          sourceName,
+          abi: artifact.abi,
+          bytecode: `0x${artifact.evm.bytecode.object}`
+        },
+        null,
+        2
+      )
+    );
+    console.log(`Compiled contract artifact written to ${artifactPath}`);
+  }
+}

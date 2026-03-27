@@ -13,28 +13,41 @@ function deriveWallet(index, provider) {
 }
 
 async function main() {
-  const artifactPath = path.resolve(__dirname, "..", "artifacts", "SBIFCouponSettlement.json");
-  if (!fs.existsSync(artifactPath)) {
+  const registryArtifactPath = path.resolve(__dirname, "..", "artifacts", "ComplianceRegistry.json");
+  const settlementArtifactPath = path.resolve(__dirname, "..", "artifacts", "SBIFCouponSettlement.json");
+  if (!fs.existsSync(registryArtifactPath) || !fs.existsSync(settlementArtifactPath)) {
     throw new Error("Contract artifact not found. Run `npm.cmd run compile:contract` first.");
   }
 
-  const artifact = JSON.parse(fs.readFileSync(artifactPath, "utf8"));
+  const registryArtifact = JSON.parse(fs.readFileSync(registryArtifactPath, "utf8"));
+  const settlementArtifact = JSON.parse(fs.readFileSync(settlementArtifactPath, "utf8"));
   const provider = new ethers.JsonRpcProvider("http://127.0.0.1:8545");
 
   const merchant = deriveWallet(0, provider);
   const supplier = deriveWallet(1, provider);
   const courier = deriveWallet(2, provider);
   const platformTreasury = deriveWallet(3, provider);
+  const complianceAdmin = merchant;
 
-  const factory = new ethers.ContractFactory(artifact.abi, artifact.bytecode, merchant);
-  const contract = await factory.deploy(
+  const registryFactory = new ethers.ContractFactory(registryArtifact.abi, registryArtifact.bytecode, complianceAdmin);
+  const registryContract = await registryFactory.deploy(complianceAdmin.address);
+  await registryContract.waitForDeployment();
+
+  const settlementFactory = new ethers.ContractFactory(
+    settlementArtifact.abi,
+    settlementArtifact.bytecode,
+    merchant
+  );
+  const settlementContract = await settlementFactory.deploy(
     supplier.address,
     courier.address,
-    platformTreasury.address
+    platformTreasury.address,
+    await registryContract.getAddress()
   );
-  await contract.waitForDeployment();
+  await settlementContract.waitForDeployment();
 
-  const contractAddress = await contract.getAddress();
+  const contractAddress = await settlementContract.getAddress();
+  const registryAddress = await registryContract.getAddress();
   const network = await provider.getNetwork();
   const outputPath = path.resolve(__dirname, "..", "public", "contract-config.json");
 
@@ -42,22 +55,26 @@ async function main() {
     outputPath,
     JSON.stringify(
       {
-        contractAddress,
+        settlementContractAddress: contractAddress,
+        complianceRegistryAddress: registryAddress,
         chainId: Number(network.chainId),
         networkName: "Ganache Localhost",
         merchant: merchant.address,
         supplier: supplier.address,
         courier: courier.address,
         platformTreasury: platformTreasury.address,
+        complianceAdmin: complianceAdmin.address,
         tokenPriceWei: ethers.parseEther("0.015").toString(),
-        abi: artifact.abi
+        settlementAbi: settlementArtifact.abi,
+        complianceRegistryAbi: registryArtifact.abi
       },
       null,
       2
     )
   );
 
-  console.log(`Contract deployed to ${contractAddress}`);
+  console.log(`Compliance registry deployed to ${registryAddress}`);
+  console.log(`Settlement contract deployed to ${contractAddress}`);
   console.log(`Contract config written to ${outputPath}`);
 }
 

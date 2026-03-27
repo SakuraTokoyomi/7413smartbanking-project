@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SBIF Florist Shop POC</title>
-    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <div class="page-shell">
@@ -31,7 +31,7 @@
         <section class="card">
           <div class="section-head">
             <h2>Wallet Connection</h2>
-            <p>Connect an EVM wallet such as MetaMask and use real Solidity contract calls for coupon purchase and redemption.</p>
+            <p>Connect an EVM wallet and interact with the permissioned public-chain flow directly from the dApp.</p>
           </div>
           <div class="wallet-panel">
             <div id="wallet-status" class="stack-item">
@@ -53,20 +53,37 @@
 
         <section class="card">
           <div class="section-head">
-            <h2>Open Banking</h2>
-            <p>Connect a bank account through the official Plaid sandbox flow to demonstrate real open banking API integration.</p>
+            <h2>Compliance Gate</h2>
+            <p>RegTech and open-banking checks are represented on-chain as permission records before buyers can transact.</p>
           </div>
           <div class="wallet-panel">
-            <div id="bank-status" class="stack-item">
-              <h3>Bank connection</h3>
-              <p>No bank account connected.</p>
+            <div id="compliance-status" class="stack-item">
+              <h3>Compliance status</h3>
+              <p>No on-chain compliance record loaded.</p>
             </div>
+            <form id="compliance-form" class="form-grid">
+              <label>
+                Wallet to attest
+                <input type="text" name="targetAddress" id="target-address-field" placeholder="0x..." />
+              </label>
+              <label>
+                Method
+                <select name="method">
+                  <option value="CHAINALYSIS">Chainalysis screening</option>
+                  <option value="OPEN_BANKING">Open Banking verification</option>
+                </select>
+              </label>
+              <label>
+                Valid for days
+                <input type="number" name="validDays" min="1" value="30" />
+              </label>
+              <button type="submit">Grant compliance</button>
+            </form>
             <div class="action-row">
-              <button id="connect-bank" type="button">Connect bank</button>
-              <button id="refresh-bank" type="button" class="ghost">Refresh accounts</button>
+              <button id="refresh-compliance" type="button" class="ghost">Refresh compliance</button>
+              <button id="revoke-compliance" type="button" class="ghost danger">Revoke compliance</button>
             </div>
-            <div id="bank-accounts" class="stack"></div>
-            <p class="feedback" id="bank-feedback"></p>
+            <p class="feedback" id="compliance-feedback"></p>
           </div>
         </section>
 
@@ -107,27 +124,14 @@
               <input type="text" name="buyerName" value="John" required />
             </label>
             <label>
-              Wallet address
-              <input type="text" name="walletAddress" id="wallet-address-field" placeholder="Connect wallet or paste address" />
-            </label>
-            <label>
               Quantity
               <input type="number" name="quantity" min="1" value="2" />
-            </label>
-            <label>
-              Payment rail
-              <select name="paymentMethod">
-                <option value="eHKD">eHKD</option>
-                <option value="eCNY">eCNY</option>
-                <option value="USDC">USDC</option>
-                <option value="FPS">FPS</option>
-              </select>
             </label>
             <button type="submit">Issue coupons</button>
           </form>
           <div class="action-row">
-            <button id="process-expiry" class="ghost">Process expired coupons</button>
-            <button id="reset-ledger" class="ghost danger">Reset demo ledger</button>
+            <button id="process-expiry" type="button" class="ghost">Process expired coupons</button>
+            <button id="refresh-chain" type="button" class="ghost">Refresh on-chain data</button>
           </div>
           <div id="coupon-feedback" class="feedback"></div>
         </section>
@@ -135,7 +139,7 @@
         <section class="card">
           <div class="section-head">
             <h2>Platform Metrics</h2>
-            <p>Ledger totals driven by the backend settlement engine.</p>
+            <p>Metrics pulled from on-chain contract state on the permissioned public blockchain.</p>
           </div>
           <div id="metrics" class="metric-grid"></div>
         </section>
@@ -167,14 +171,13 @@
         <section class="card wide">
           <div class="section-head">
             <h2>Recent Transactions</h2>
-            <p>A lightweight ledger view for demo and reporting.</p>
+            <p>Transaction history reconstructed from blockchain events.</p>
           </div>
           <div id="transactions" class="stack"></div>
         </section>
       </main>
     </div>
-    <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
-    <script src="/vendor/ethers.umd.min.js"></script>
-    <script type="module" src="/app.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.0/ethers.umd.min.js"></script>
+    <script type="module" src="./app.js"></script>
   </body>
 </html>
