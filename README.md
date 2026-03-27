@@ -40,7 +40,7 @@ Two parts are now connected to real external-style interfaces instead of pure mo
 ### 1. Enter the project
 
 ```powershell
-cd "c:\Users\Tokoyomi\Desktop\hku\smart_banking\7413smartbanking-project"
+cd "c:\Users\你的用户i\Desktop\hku\smart_banking\7413smartbanking-project"
 ```
 
 ### 2. Create env file
