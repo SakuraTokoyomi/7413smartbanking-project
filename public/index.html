@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SBIF Florist Shop POC</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">HKU Smart Banking and Innovative Finance</p>
+          <h1>Florist Shop SBIF Platform</h1>
+          <p class="hero-copy">
+            A deliverable proof of concept for investor financing, tokenized coupons,
+            programmable settlement, and BIDT-driven ecosystem design.
+          </p>
+        </div>
+        <div class="hero-panel">
+          <p class="panel-label">Smart Contract Logic</p>
+          <ul class="compact-list">
+            <li>Coupon purchase records token issuance</li>
+            <li>Redemption splits value across supplier, courier, merchant, and platform</li>
+            <li>Expiry releases remaining value to the merchant automatically</li>
+          </ul>
+        </div>
+      </header>
+
+      <main class="grid">
+        <section class="card">
+          <div class="section-head">
+            <h2>Wallet Connection</h2>
+            <p>Connect an EVM wallet such as MetaMask and use real Solidity contract calls for coupon purchase and redemption.</p>
+          </div>
+          <div class="wallet-panel">
+            <div id="wallet-status" class="stack-item">
+              <h3>Wallet status</h3>
+              <p>No wallet connected.</p>
+            </div>
+            <div id="contract-status" class="stack-item">
+              <h3>Contract status</h3>
+              <p>No deployed contract configured yet.</p>
+            </div>
+            <div class="action-row">
+              <button id="connect-wallet" type="button">Connect wallet</button>
+              <button id="switch-network" type="button" class="ghost">Switch to local chain</button>
+              <button id="disconnect-wallet" type="button" class="ghost">Disconnect locally</button>
+            </div>
+            <p class="feedback" id="wallet-feedback"></p>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="section-head">
+            <h2>Open Banking</h2>
+            <p>Connect a bank account through the official Plaid sandbox flow to demonstrate real open banking API integration.</p>
+          </div>
+          <div class="wallet-panel">
+            <div id="bank-status" class="stack-item">
+              <h3>Bank connection</h3>
+              <p>No bank account connected.</p>
+            </div>
+            <div class="action-row">
+              <button id="connect-bank" type="button">Connect bank</button>
+              <button id="refresh-bank" type="button" class="ghost">Refresh accounts</button>
+            </div>
+            <div id="bank-accounts" class="stack"></div>
+            <p class="feedback" id="bank-feedback"></p>
+          </div>
+        </section>
+
+        <section class="card accent">
+          <div class="section-head">
+            <h2>Scenario Simulation</h2>
+            <p>Compare financing outcomes for Scenario A and Scenario B.</p>
+          </div>
+          <form id="scenario-form" class="form-grid">
+            <label>
+              Scenario
+              <select name="scenario">
+                <option value="A">A: Single investor ($200)</option>
+                <option value="B">B: Group investors ($1,200)</option>
+              </select>
+            </label>
+            <label>
+              Dozens sold
+              <input type="number" name="dozensSold" min="0" value="100" />
+            </label>
+            <label>
+              Platform fee rate
+              <input type="number" name="feeRate" min="0" max="0.03" step="0.001" value="0.015" />
+            </label>
+            <button type="submit">Run settlement</button>
+          </form>
+          <div id="scenario-result" class="metric-grid"></div>
+        </section>
+
+        <section class="card">
+          <div class="section-head">
+            <h2>Coupon Token Operations</h2>
+            <p>Simulate issuance, redemption, and expiry for prepaid flower coupons.</p>
+          </div>
+          <form id="purchase-form" class="form-grid">
+            <label>
+              Buyer name
+              <input type="text" name="buyerName" value="John" required />
+            </label>
+            <label>
+              Wallet address
+              <input type="text" name="walletAddress" id="wallet-address-field" placeholder="Connect wallet or paste address" />
+            </label>
+            <label>
+              Quantity
+              <input type="number" name="quantity" min="1" value="2" />
+            </label>
+            <label>
+              Payment rail
+              <select name="paymentMethod">
+                <option value="eHKD">eHKD</option>
+                <option value="eCNY">eCNY</option>
+                <option value="USDC">USDC</option>
+                <option value="FPS">FPS</option>
+              </select>
+            </label>
+            <button type="submit">Issue coupons</button>
+          </form>
+          <div class="action-row">
+            <button id="process-expiry" class="ghost">Process expired coupons</button>
+            <button id="reset-ledger" class="ghost danger">Reset demo ledger</button>
+          </div>
+          <div id="coupon-feedback" class="feedback"></div>
+        </section>
+
+        <section class="card">
+          <div class="section-head">
+            <h2>Platform Metrics</h2>
+            <p>Ledger totals driven by the backend settlement engine.</p>
+          </div>
+          <div id="metrics" class="metric-grid"></div>
+        </section>
+
+        <section class="card wide">
+          <div class="section-head">
+            <h2>Issued Coupons</h2>
+            <p>Redeem any active coupon to trigger oracle-style value distribution.</p>
+          </div>
+          <div id="coupon-list" class="table-wrap"></div>
+        </section>
+
+        <section class="card wide">
+          <div class="section-head">
+            <h2>Stakeholders and Ecosystem Benefits</h2>
+            <p>Who participates in the SBIF ecosystem and why they benefit.</p>
+          </div>
+          <div id="stakeholders" class="stack"></div>
+        </section>
+
+        <section class="card wide">
+          <div class="section-head">
+            <h2>BIDT Model</h2>
+            <p>Business, Information, Digital, and Technology rationale for the design.</p>
+          </div>
+          <div id="bidt" class="bidt-grid"></div>
+        </section>
+
+        <section class="card wide">
+          <div class="section-head">
+            <h2>Recent Transactions</h2>
+            <p>A lightweight ledger view for demo and reporting.</p>
+          </div>
+          <div id="transactions" class="stack"></div>
+        </section>
+      </main>
+    </div>
+    <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
+    <script src="/vendor/ethers.umd.min.js"></script>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

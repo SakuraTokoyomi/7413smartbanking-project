@@ -1,0 +1,28 @@
+{
+  "name": "sbif-florist-poc",
+  "version": "1.0.0",
+  "description": "Deliverable Smart Banking and Innovative Finance florist shop POC",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "test": "npm.cmd run compile:contract && node --test --test-isolation=none",
+    "reset-data": "node scripts/reset-data.js",
+    "chain": "npx.cmd ganache --server.port 8545 --chain.chainId 1337 --wallet.mnemonic \"test test test test test test test test test test test junk\"",
+    "compile:contract": "node scripts/compile-contract.cjs",
+    "deploy:contract": "node scripts/deploy-contract.cjs",
+    "test:contract": "node --test test/contract.test.js",
+    "test:all": "npm.cmd run test"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-ethers": "^3.0.6",
+    "chai": "^4.4.1",
+    "ethers": "^6.13.0",
+    "ganache": "^7.9.2",
+    "hardhat": "^2.22.0",
+    "solc": "^0.8.24"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "plaid": "^30.0.0"
+  }
+}
